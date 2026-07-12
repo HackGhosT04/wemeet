@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
+from config import TURN_SERVER_URL, TURN_USERNAME, TURN_CREDENTIAL
 from firebase_init import realtime_db
 from auth_utils import verify_token
 import uuid
+import json
 
 router = APIRouter()
 
@@ -69,9 +71,16 @@ async def meeting_room(request: Request, meeting_id: str):
     meeting_data = realtime_db.child("meetings").child(meeting_id).get()
     if not meeting_data:
         return request.app.state.templates.TemplateResponse(request, "404.html", {"request": request}, status_code=404)
-    # Build ICE servers config (STUN only to avoid TURN costs)
+    # Build ICE servers config with optional TURN fallback.
     ice_servers = [{"urls": "stun:stun.l.google.com:19302"}]
-    import json
+    if TURN_SERVER_URL:
+        turn_server = {"urls": TURN_SERVER_URL}
+        if TURN_USERNAME:
+            turn_server["username"] = TURN_USERNAME
+        if TURN_CREDENTIAL:
+            turn_server["credential"] = TURN_CREDENTIAL
+        ice_servers.append(turn_server)
+
     return request.app.state.templates.TemplateResponse(request, "meeting.html", {
         "request": request,
         "user": user,

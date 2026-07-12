@@ -48,7 +48,7 @@ docker run --rm -p 8000:10000 `
 
 ICE/STUN/TURN configuration:
 - For testing and low-cost deployment, Google STUN (`stun:stun.l.google.com:19302`) is used by default.
-- TURN support has been removed to avoid additional costs; you can re-enable it later by adding TURN environment variables and updating `routes/pages.py`.
+- Optional TURN support is available if you set `TURN_SERVER_URL`, `TURN_USERNAME`, and `TURN_CREDENTIAL`.
 
 Security and notes:
 - Do not commit service account JSON or TURN credentials to source control.
@@ -58,3 +58,8 @@ If you want, I can:
 - Run the app locally and smoke-test WebSocket connections.
 - Add `aiortc` usage for server-side media relay or recording (currently the app uses browser P2P).
 - Harden session cookie settings and CSRF protection.
+
+
+git add .
+git commit -m "Add Docker deployment for Render"
+git push -u origin main

@@ -38,6 +38,8 @@ function addRemoteVideo(userId, stream) {
     video.id = `video-${userId}`;
     video.autoplay = true;
     video.playsInline = true;
+    video.muted = false;
+    video.volume = 1;
     video.srcObject = stream;
     const label = document.createElement('span');
     label.className = 'label';
@@ -45,6 +47,11 @@ function addRemoteVideo(userId, stream) {
     wrapper.appendChild(video);
     wrapper.appendChild(label);
     videosContainer.appendChild(wrapper);
+
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(err => console.warn('Remote playback blocked until user interaction:', err));
+    }
 }
 
 function removeRemotePeer(userId) {
