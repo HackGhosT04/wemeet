@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, WebSocket
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.templating import Jinja2Templates
@@ -6,6 +6,9 @@ from config import SESSION_SECRET_KEY
 from routes import auth_routes, pages
 from websocket.signaling import signaling_endpoint
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -26,9 +29,10 @@ app.include_router(pages.router)
 
 # WebSocket endpoint
 @app.websocket("/ws/{meeting_id}")
-async def ws_endpoint(websocket, meeting_id: str):
+async def ws_endpoint(websocket: WebSocket, meeting_id: str):
     # Accept immediately to avoid handshake-level 403 rejections before app logic runs.
     await websocket.accept()
+    logger.info("WS route accepted: meeting_id=%s", meeting_id)
     await signaling_endpoint(websocket, meeting_id)
 
 

@@ -30,7 +30,9 @@ def _sync_participant_count(meeting_id: str) -> int:
 async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
     # Prefer the authenticated session cookie; fall back to query token for compatibility.
     session_data = websocket.scope.get("session") or {}
-    token = session_data.get("token") or websocket.query_params.get("token")
+    session_token = session_data.get("token")
+    query_token = websocket.query_params.get("token")
+    token = session_token or query_token
     if not token:
         try:
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=5)
@@ -40,6 +42,13 @@ async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
         except Exception:
             token = None
 
+    logger.info(
+        "WS signaling entry: meeting_id=%s has_session_token=%s has_query_token=%s",
+        meeting_id,
+        bool(session_token),
+        bool(query_token),
+    )
+
     if not token:
         logger.warning("WebSocket rejected for meeting %s: missing token", meeting_id)
         await websocket.close(code=4001, reason="Missing token")
@@ -47,6 +56,7 @@ async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
     try:
         decoded = verify_token(token)
         user_id = decoded["uid"]
+        logger.info("WS token verified: meeting_id=%s user_id=%s", meeting_id, user_id)
     except Exception:
         logger.exception("WebSocket rejected for meeting %s: invalid token", meeting_id)
         await websocket.close(code=4001, reason="Invalid token")
