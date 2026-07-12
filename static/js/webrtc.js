@@ -91,10 +91,6 @@ function flushPendingCandidates(userId) {
     pendingCandidates[userId] = [];
 }
 
-function shouldInitiateOffer(peerUserId) {
-    return String(USER_ID) > String(peerUserId);
-}
-
 function wirePeerConnection(userId) {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     peerConnections[userId] = pc;
@@ -207,7 +203,7 @@ function connectWebSocket() {
             case 'welcome':
                 // Store own userId and name (already set)
                 data.participants.forEach(p => {
-                    connectToPeer(p.userId, p.name, shouldInitiateOffer(p.userId)).catch(err => {
+                    connectToPeer(p.userId, p.name, true).catch(err => {
                         console.error('Failed to prepare peer connection:', err);
                     });
                 });
@@ -218,12 +214,16 @@ function connectWebSocket() {
 
             case 'user-joined':
                 if (userId !== USER_ID) {
-                    connectToPeer(userId, name, shouldInitiateOffer(userId)).catch(err => {
-                        console.error('Failed to connect to new participant:', err);
-                    });
+                    peerNames[userId] = name || userId;
+                    addParticipantToList(userId, peerNames[userId]);
+                    createPeerConnection(userId);
                     if (typeof data.participantCount !== 'undefined') {
                         setParticipantCount(data.participantCount);
                     }
+                    setConnectionStatus(`${peerNames[userId]} joined. Establishing media...`, 'ready');
+                    connectToPeer(userId, name, false).catch(err => {
+                        console.error('Failed to connect to new participant:', err);
+                    });
                 }
                 break;
 
