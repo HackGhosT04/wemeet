@@ -6,11 +6,14 @@ const toggleCamBtn = document.getElementById('toggleCam');
 const leaveBtn = document.getElementById('leaveMeeting');
 const participantsList = document.getElementById('participants-list');
 const participantCountEl = document.getElementById('participant-count');
+const connectionStatusEl = document.getElementById('connection-status');
 
 let localStream;
 let ws;
 const peerConnections = {}; // userId -> RTCPeerConnection
 const peerNames = {};        // userId -> name for labels
+const remoteStreams = {};    // userId -> MediaStream
+const pendingCandidates = {}; // userId -> RTCIceCandidate[]
 let micEnabled = true;
 let camEnabled = true;
 
@@ -20,12 +23,20 @@ function setParticipantCount(count) {
     participantCountEl.textContent = `${safeCount} participant${safeCount === 1 ? '' : 's'}`;
 }
 
+function setConnectionStatus(message, tone = 'neutral') {
+    if (!connectionStatusEl) return;
+    connectionStatusEl.textContent = message;
+    connectionStatusEl.dataset.tone = tone;
+}
+
 async function startMedia() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         localVideo.srcObject = localStream;
+        setConnectionStatus('Camera and microphone ready. Connecting peers...', 'ready');
     } catch (err) {
         console.error('Media access denied:', err);
+        setConnectionStatus('Camera or microphone blocked.', 'error');
         alert('Camera and microphone access is required for this meeting.');
     }
 }
@@ -59,35 +70,67 @@ function addRemoteVideo(userId, stream) {
     if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch(err => console.warn('Remote playback blocked until user interaction:', err));
     }
+    setConnectionStatus(`Connected to ${Object.keys(peerConnections).length} participant${Object.keys(peerConnections).length === 1 ? '' : 's'}`, 'ready');
 }
 
-function removeRemotePeer(userId) {
-    if (peerConnections[userId]) {
-        peerConnections[userId].close();
-        delete peerConnections[userId];
+function getRemoteStream(userId) {
+    if (!remoteStreams[userId]) {
+        remoteStreams[userId] = new MediaStream();
     }
-    const wrapper = document.getElementById(`wrapper-${userId}`);
-    if (wrapper) wrapper.remove();
-    // Also remove from participant list
-    removeParticipantFromList(userId);
+    return remoteStreams[userId];
 }
 
-function createPeerConnection(userId) {
+function flushPendingCandidates(userId) {
+    const pc = peerConnections[userId];
+    const queued = pendingCandidates[userId] || [];
+    if (!pc || !queued.length) return;
+
+    queued.forEach(candidate => {
+        pc.addIceCandidate(candidate).catch(err => console.error('ICE candidate error:', err));
+    });
+    pendingCandidates[userId] = [];
+}
+
+function shouldInitiateOffer(peerUserId) {
+    return String(USER_ID) > String(peerUserId);
+}
+
+function wirePeerConnection(userId) {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     peerConnections[userId] = pc;
+
+    pc.addTransceiver('audio', { direction: 'sendrecv' });
+    pc.addTransceiver('video', { direction: 'sendrecv' });
 
     if (localStream) {
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
     }
 
     pc.ontrack = (event) => {
-        if (event.streams && event.streams[0]) {
-            addRemoteVideo(userId, event.streams[0]);
+        const remoteStream = getRemoteStream(userId);
+        if (event.track) {
+            const existingTracks = remoteStream.getTracks();
+            const alreadyAdded = existingTracks.some(track => track.id === event.track.id);
+            if (!alreadyAdded) {
+                remoteStream.addTrack(event.track);
+            }
         }
+        if (event.streams && event.streams.length) {
+            event.streams.forEach(stream => {
+                stream.getTracks().forEach(track => {
+                    const existingTracks = remoteStream.getTracks();
+                    const alreadyAdded = existingTracks.some(existingTrack => existingTrack.id === track.id);
+                    if (!alreadyAdded) {
+                        remoteStream.addTrack(track);
+                    }
+                });
+            });
+        }
+        addRemoteVideo(userId, remoteStream);
     };
 
     pc.onicecandidate = (event) => {
-        if (event.candidate) {
+        if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
                 type: 'ice-candidate',
                 target: userId,
@@ -97,10 +140,52 @@ function createPeerConnection(userId) {
     };
 
     pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') {
+            addRemoteVideo(userId, getRemoteStream(userId));
+        }
         if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
             removeRemotePeer(userId);
         }
     };
+
+    return pc;
+}
+
+function removeRemotePeer(userId) {
+    if (peerConnections[userId]) {
+        peerConnections[userId].close();
+        delete peerConnections[userId];
+    }
+    delete remoteStreams[userId];
+    delete pendingCandidates[userId];
+    const wrapper = document.getElementById(`wrapper-${userId}`);
+    if (wrapper) wrapper.remove();
+    // Also remove from participant list
+    removeParticipantFromList(userId);
+}
+
+function createPeerConnection(userId) {
+    return peerConnections[userId] || wirePeerConnection(userId);
+}
+
+async function connectToPeer(userId, name, isOfferer) {
+    peerNames[userId] = name || userId;
+    addParticipantToList(userId, peerNames[userId]);
+    const pc = createPeerConnection(userId);
+
+    if (!isOfferer || pc.signalingState !== 'stable') {
+        return pc;
+    }
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'offer',
+            target: userId,
+            sdp: pc.localDescription
+        }));
+    }
 
     return pc;
 }
@@ -110,6 +195,7 @@ function connectWebSocket() {
     ws = new WebSocket(`${protocol}://${window.location.host}/ws/${MEETING_ID}?token=${AUTH_TOKEN}`);
 
     ws.onopen = () => console.log('Signaling connected');
+    setConnectionStatus('Signaling connected. Waiting for media...', 'ready');
 
     setParticipantCount(typeof INITIAL_PARTICIPANT_COUNT === 'number' ? INITIAL_PARTICIPANT_COUNT : 0);
 
@@ -121,8 +207,9 @@ function connectWebSocket() {
             case 'welcome':
                 // Store own userId and name (already set)
                 data.participants.forEach(p => {
-                    peerNames[p.userId] = p.name;
-                    addParticipantToList(p.userId, p.name);
+                    connectToPeer(p.userId, p.name, shouldInitiateOffer(p.userId)).catch(err => {
+                        console.error('Failed to prepare peer connection:', err);
+                    });
                 });
                 if (typeof data.participantCount !== 'undefined') {
                     setParticipantCount(data.participantCount);
@@ -131,50 +218,59 @@ function connectWebSocket() {
 
             case 'user-joined':
                 if (userId !== USER_ID) {
-                    peerNames[userId] = name;
-                    addParticipantToList(userId, name);
+                    connectToPeer(userId, name, shouldInitiateOffer(userId)).catch(err => {
+                        console.error('Failed to connect to new participant:', err);
+                    });
                     if (typeof data.participantCount !== 'undefined') {
                         setParticipantCount(data.participantCount);
                     }
-                    // Create peer connection and send offer
-                    const pc = createPeerConnection(userId);
-                    const offer = await pc.createOffer();
-                    await pc.setLocalDescription(offer);
-                    ws.send(JSON.stringify({
-                        type: 'offer',
-                        target: userId,
-                        sdp: pc.localDescription
-                    }));
                 }
                 break;
 
             case 'offer':
-                if (data.sender && !peerConnections[data.sender]) {
-                    peerNames[data.sender] = name || data.sender; // name might be missing
+                if (data.sender) {
                     const pc = createPeerConnection(data.sender);
+                    peerNames[data.sender] = name || data.sender; // name might be missing
+                    addParticipantToList(data.sender, peerNames[data.sender]);
                     await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                    flushPendingCandidates(data.sender);
                     const answer = await pc.createAnswer();
                     await pc.setLocalDescription(answer);
-                    ws.send(JSON.stringify({
-                        type: 'answer',
-                        target: data.sender,
-                        sdp: pc.localDescription
-                    }));
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'answer',
+                            target: data.sender,
+                            sdp: pc.localDescription
+                        }));
+                    }
                 }
                 break;
 
             case 'answer':
                 if (peerConnections[data.sender]) {
                     await peerConnections[data.sender].setRemoteDescription(new RTCSessionDescription(data.sdp));
+                    flushPendingCandidates(data.sender);
                 }
                 break;
 
             case 'ice-candidate':
-                if (peerConnections[data.sender] && data.candidate) {
-                    try {
-                        await peerConnections[data.sender].addIceCandidate(new RTCIceCandidate(data.candidate));
-                    } catch (e) {
-                        console.error('ICE candidate error:', e);
+                if (data.sender && data.candidate) {
+                    const pc = peerConnections[data.sender];
+                    const candidate = new RTCIceCandidate(data.candidate);
+                    if (!pc) {
+                        if (!pendingCandidates[data.sender]) pendingCandidates[data.sender] = [];
+                        pendingCandidates[data.sender].push(candidate);
+                        break;
+                    }
+                    if (pc.remoteDescription) {
+                        try {
+                            await pc.addIceCandidate(candidate);
+                        } catch (e) {
+                            console.error('ICE candidate error:', e);
+                        }
+                    } else {
+                        if (!pendingCandidates[data.sender]) pendingCandidates[data.sender] = [];
+                        pendingCandidates[data.sender].push(candidate);
                     }
                 }
                 break;
@@ -193,6 +289,7 @@ function connectWebSocket() {
     ws.onerror = (err) => console.error('WebSocket error:', err);
     ws.onclose = () => {
         Object.keys(peerConnections).forEach(uid => removeRemotePeer(uid));
+        setConnectionStatus('Disconnected from meeting.', 'error');
         console.log('Disconnected');
     };
 }

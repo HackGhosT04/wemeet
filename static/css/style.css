@@ -377,6 +377,32 @@ p {
     font-weight: 700;
 }
 
+.meeting-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.86);
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.meeting-status[data-tone="ready"] {
+    border-color: rgba(20, 184, 166, 0.18);
+    background: rgba(20, 184, 166, 0.08);
+    color: #0f766e;
+}
+
+.meeting-status[data-tone="error"] {
+    border-color: rgba(220, 38, 38, 0.18);
+    background: rgba(254, 226, 226, 0.88);
+    color: var(--danger);
+}
+
 #meeting-container h2 {
     display: flex;
     align-items: center;

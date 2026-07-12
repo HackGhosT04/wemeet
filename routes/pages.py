@@ -58,9 +58,13 @@ async def join_meeting(request: Request):
     if not token:
         return RedirectResponse(url="/login?next=/", status_code=303)
 
-    meeting_id = (await request.form()).get("meeting_code", "").strip()
+    form = await request.form()
+    meeting_id = form.get("meeting_code", "").strip()
     if not meeting_id:
         return RedirectResponse(url="/?join_error=missing", status_code=303)
+
+    if "/meeting/" in meeting_id:
+        meeting_id = meeting_id.split("/meeting/", 1)[1].split("?", 1)[0].split("#", 1)[0].strip("/")
 
     try:
         decoded = verify_token(token)
