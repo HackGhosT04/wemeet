@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.templating import Jinja2Templates
@@ -28,3 +28,8 @@ app.include_router(pages.router)
 @app.websocket("/ws/{meeting_id}")
 async def ws_endpoint(websocket, meeting_id: str):
     await signaling_endpoint(websocket, meeting_id)
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    return Response(status_code=204)

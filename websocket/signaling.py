@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import WebSocket, WebSocketDisconnect
 from auth_utils import verify_token
 from firebase_init import realtime_db
@@ -7,17 +9,22 @@ import json
 active_meetings = {}
 # meeting_id -> user_id -> WebSocket (to enforce single connection per user)
 user_connections = {}
+logger = logging.getLogger(__name__)
 
 
 def _sync_participant_count(meeting_id: str) -> int:
-    participants = realtime_db.child("participants").child(meeting_id).get() or {}
-    if isinstance(participants, dict):
-        count = len(participants)
-    else:
-        count = 0
-    meeting_ref = realtime_db.child("meetings").child(meeting_id)
-    meeting_ref.update({"participant_count": count, "active": True})
-    return count
+    try:
+        participants = realtime_db.child("participants").child(meeting_id).get() or {}
+        if isinstance(participants, dict):
+            count = len(participants)
+        else:
+            count = len(active_meetings.get(meeting_id, []))
+        meeting_ref = realtime_db.child("meetings").child(meeting_id)
+        meeting_ref.update({"participant_count": count, "active": True})
+        return count
+    except Exception:
+        logger.exception("Failed to sync participant count for meeting %s", meeting_id)
+        return len(active_meetings.get(meeting_id, []))
 
 async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
     # Extract token from query parameter
@@ -61,10 +68,13 @@ async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
 
     # Add participant to Realtime Database
     participant_ref = realtime_db.child("participants").child(meeting_id).child(user_id)
-    participant_ref.set({
-        "name": user_name,
-        "joined_at": {".sv": "timestamp"}
-    })
+    try:
+        participant_ref.set({
+            "name": user_name,
+            "joined_at": {".sv": "timestamp"}
+        })
+    except Exception:
+        logger.exception("Failed to store participant record for meeting %s user %s", meeting_id, user_id)
     participant_count = _sync_participant_count(meeting_id)
 
     # Send welcome message to the new client with existing participants
@@ -123,7 +133,10 @@ async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
         if user_id in user_connections.get(meeting_id, {}):
             del user_connections[meeting_id][user_id]
         # Remove participant from DB
-        participant_ref.delete()
+        try:
+            participant_ref.delete()
+        except Exception:
+            logger.exception("Failed to delete participant record for meeting %s user %s", meeting_id, user_id)
         participant_count = _sync_participant_count(meeting_id)
 
         # Notify others about user leaving
