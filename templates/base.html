@@ -17,6 +17,11 @@
             <a href="/signup">Sign Up</a>
         {% endif %}
     </nav>
+    {% if request.query_params.get("join_error") == "missing" %}
+    <main>
+        <div class="error" style="max-width: 720px; margin: 1rem auto 0;">That meeting code does not exist or is no longer active.</div>
+    </main>
+    {% endif %}
     <main>
         {% block content %}{% endblock %}
     </main>

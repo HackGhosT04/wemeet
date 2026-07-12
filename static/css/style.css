@@ -153,6 +153,42 @@ p {
     padding: clamp(2rem, 4vw, 4rem);
 }
 
+.join-card {
+    max-width: 520px;
+    margin: 2rem auto 0;
+    padding: 1.25rem;
+    text-align: left;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: var(--shadow-sm);
+}
+
+.join-card h2 {
+    margin-bottom: 0.5rem;
+}
+
+.join-form {
+    display: grid;
+    gap: 0.8rem;
+    margin-top: 0.8rem;
+}
+
+.join-form label {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.join-form input {
+    width: 100%;
+    min-height: 48px;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--text);
+}
+
 .landing-container p {
     max-width: 58ch;
     margin-left: auto;
@@ -311,6 +347,34 @@ p {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.8));
     backdrop-filter: blur(18px) saturate(1.1);
     box-shadow: var(--shadow-lg);
+}
+
+.meeting-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.meeting-meta {
+    display: flex;
+    align-items: center;
+}
+
+.meeting-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0.45rem 0.85rem;
+    border: 1px solid rgba(37, 99, 235, 0.14);
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.08);
+    color: var(--primary-dark);
+    font-size: 0.92rem;
+    font-weight: 700;
 }
 
 #meeting-container h2 {
@@ -487,6 +551,10 @@ video {
     #meeting-container {
         margin-top: 1rem;
         border-radius: 22px;
+    }
+
+    .meeting-header {
+        align-items: stretch;
     }
 
     #share {

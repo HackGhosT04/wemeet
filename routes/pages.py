@@ -47,8 +47,34 @@ async def create_meeting(request: Request):
     realtime_db.child("meetings").child(meeting_id).set({
         "created_by": uid,
         "created_at": {".sv": "timestamp"},
-        "active": True
+        "active": True,
+        "participant_count": 0
     })
+    return RedirectResponse(url=f"/meeting/{meeting_id}", status_code=303)
+
+@router.post("/join-meeting")
+async def join_meeting(request: Request):
+    token = request.session.get("token")
+    if not token:
+        return RedirectResponse(url="/login?next=/", status_code=303)
+
+    meeting_id = (await request.form()).get("meeting_code", "").strip()
+    if not meeting_id:
+        return RedirectResponse(url="/?join_error=missing", status_code=303)
+
+    try:
+        decoded = verify_token(token)
+        uid = decoded["uid"]
+        user_data = realtime_db.child("users").child(uid).get()
+        if not user_data:
+            return RedirectResponse(url="/login?next=/", status_code=303)
+    except Exception:
+        return RedirectResponse(url="/login?next=/", status_code=303)
+
+    meeting_data = realtime_db.child("meetings").child(meeting_id).get()
+    if not meeting_data or not meeting_data.get("active", True):
+        return RedirectResponse(url="/?join_error=missing", status_code=303)
+
     return RedirectResponse(url=f"/meeting/{meeting_id}", status_code=303)
 
 @router.get("/meeting/{meeting_id}")
@@ -69,8 +95,10 @@ async def meeting_room(request: Request, meeting_id: str):
 
     # Validate meeting exists
     meeting_data = realtime_db.child("meetings").child(meeting_id).get()
-    if not meeting_data:
+    if not meeting_data or not meeting_data.get("active", True):
         return request.app.state.templates.TemplateResponse(request, "404.html", {"request": request}, status_code=404)
+
+    participant_count = meeting_data.get("participant_count", 0) if isinstance(meeting_data, dict) else 0
     # Build ICE servers config with optional TURN fallback.
     ice_servers = [{"urls": "stun:stun.l.google.com:19302"}]
     if TURN_SERVER_URL:
@@ -85,6 +113,7 @@ async def meeting_room(request: Request, meeting_id: str):
         "request": request,
         "user": user,
         "meeting_id": meeting_id,
+        "participant_count": participant_count,
         "token": request.session.get("token"),
         "ice_servers_json": json.dumps(ice_servers)
     })

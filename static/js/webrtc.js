@@ -5,6 +5,7 @@ const muteMicBtn = document.getElementById('muteMic');
 const toggleCamBtn = document.getElementById('toggleCam');
 const leaveBtn = document.getElementById('leaveMeeting');
 const participantsList = document.getElementById('participants-list');
+const participantCountEl = document.getElementById('participant-count');
 
 let localStream;
 let ws;
@@ -12,6 +13,12 @@ const peerConnections = {}; // userId -> RTCPeerConnection
 const peerNames = {};        // userId -> name for labels
 let micEnabled = true;
 let camEnabled = true;
+
+function setParticipantCount(count) {
+    if (!participantCountEl) return;
+    const safeCount = Number.isFinite(Number(count)) ? Number(count) : 0;
+    participantCountEl.textContent = `${safeCount} participant${safeCount === 1 ? '' : 's'}`;
+}
 
 async function startMedia() {
     try {
@@ -104,6 +111,8 @@ function connectWebSocket() {
 
     ws.onopen = () => console.log('Signaling connected');
 
+    setParticipantCount(typeof INITIAL_PARTICIPANT_COUNT === 'number' ? INITIAL_PARTICIPANT_COUNT : 0);
+
     ws.onmessage = async (event) => {
         const data = JSON.parse(event.data);
         const { type, userId, name } = data;
@@ -115,12 +124,18 @@ function connectWebSocket() {
                     peerNames[p.userId] = p.name;
                     addParticipantToList(p.userId, p.name);
                 });
+                if (typeof data.participantCount !== 'undefined') {
+                    setParticipantCount(data.participantCount);
+                }
                 break;
 
             case 'user-joined':
                 if (userId !== USER_ID) {
                     peerNames[userId] = name;
                     addParticipantToList(userId, name);
+                    if (typeof data.participantCount !== 'undefined') {
+                        setParticipantCount(data.participantCount);
+                    }
                     // Create peer connection and send offer
                     const pc = createPeerConnection(userId);
                     const offer = await pc.createOffer();
@@ -168,6 +183,9 @@ function connectWebSocket() {
                 removeRemotePeer(data.userId);
                 removeParticipantFromList(data.userId);
                 delete peerNames[data.userId];
+                if (typeof data.participantCount !== 'undefined') {
+                    setParticipantCount(data.participantCount);
+                }
                 break;
         }
     };

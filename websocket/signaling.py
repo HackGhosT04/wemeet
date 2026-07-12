@@ -8,6 +8,17 @@ active_meetings = {}
 # meeting_id -> user_id -> WebSocket (to enforce single connection per user)
 user_connections = {}
 
+
+def _sync_participant_count(meeting_id: str) -> int:
+    participants = realtime_db.child("participants").child(meeting_id).get() or {}
+    if isinstance(participants, dict):
+        count = len(participants)
+    else:
+        count = 0
+    meeting_ref = realtime_db.child("meetings").child(meeting_id)
+    meeting_ref.update({"participant_count": count, "active": True})
+    return count
+
 async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
     # Extract token from query parameter
     token = websocket.query_params.get("token")
@@ -19,6 +30,11 @@ async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
         user_id = decoded["uid"]
     except Exception:
         await websocket.close(code=4001, reason="Invalid token")
+        return
+
+    meeting_data = realtime_db.child("meetings").child(meeting_id).get()
+    if not meeting_data or not meeting_data.get("active", True):
+        await websocket.close(code=4004, reason="Meeting not found")
         return
 
     # Get user name from database
@@ -49,6 +65,7 @@ async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
         "name": user_name,
         "joined_at": {".sv": "timestamp"}
     })
+    participant_count = _sync_participant_count(meeting_id)
 
     # Send welcome message to the new client with existing participants
     existing_participants = []
@@ -63,14 +80,16 @@ async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
         "type": "welcome",
         "userId": user_id,
         "name": user_name,
-        "participants": existing_participants
+        "participants": existing_participants,
+        "participantCount": participant_count
     })
 
     # Broadcast new peer to all other connected users
     join_msg = {
         "type": "user-joined",
         "userId": user_id,
-        "name": user_name
+        "name": user_name,
+        "participantCount": participant_count
     }
     for ws in active_meetings[meeting_id]:
         if ws != websocket:
@@ -105,11 +124,13 @@ async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
             del user_connections[meeting_id][user_id]
         # Remove participant from DB
         participant_ref.delete()
+        participant_count = _sync_participant_count(meeting_id)
 
         # Notify others about user leaving
         leave_msg = {
             "type": "user-left",
-            "userId": user_id
+            "userId": user_id,
+            "participantCount": participant_count
         }
         for ws in active_meetings.get(meeting_id, []):
             try:

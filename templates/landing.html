@@ -4,6 +4,14 @@
 <div class="landing-container">
     <h1>VideoMeet</h1>
     <p>Simple, secure video meetings for everyone.</p>
+    <div class="join-card">
+        <h2>Join a meeting</h2>
+        <form method="POST" action="/join-meeting" class="join-form">
+            <label for="meeting_code">Meeting code or link</label>
+            <input id="meeting_code" name="meeting_code" type="text" placeholder="Paste meeting code here" required>
+            <button type="submit" class="btn btn-primary">Join meeting</button>
+        </form>
+    </div>
     <div class="buttons">
         <a href="/login" class="btn">Login</a>
         <a href="/signup" class="btn btn-primary">Sign Up</a>
