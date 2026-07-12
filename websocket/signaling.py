@@ -1,4 +1,5 @@
 import logging
+import asyncio
 
 from fastapi import WebSocket, WebSocketDisconnect
 from auth_utils import verify_token
@@ -30,6 +31,15 @@ async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
     # Prefer the authenticated session cookie; fall back to query token for compatibility.
     session_data = websocket.scope.get("session") or {}
     token = session_data.get("token") or websocket.query_params.get("token")
+    if not token:
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=5)
+            first_message = json.loads(raw)
+            if first_message.get("type") == "auth":
+                token = first_message.get("token")
+        except Exception:
+            token = None
+
     if not token:
         logger.warning("WebSocket rejected for meeting %s: missing token", meeting_id)
         await websocket.close(code=4001, reason="Missing token")
@@ -118,6 +128,9 @@ async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
             data = json.loads(raw)
             msg_type = data.get("type")
             target = data.get("target")  # userId to forward to
+
+            if msg_type == "auth":
+                continue
 
             if msg_type in ("offer", "answer", "ice-candidate"):
                 # Forward to the specific peer

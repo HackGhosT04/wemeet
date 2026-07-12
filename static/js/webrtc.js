@@ -191,7 +191,12 @@ function connectWebSocket() {
     const tokenQuery = AUTH_TOKEN ? `?token=${encodeURIComponent(AUTH_TOKEN)}` : '';
     ws = new WebSocket(`${protocol}://${window.location.host}/ws/${MEETING_ID}${tokenQuery}`);
 
-    ws.onopen = () => console.log('Signaling connected');
+    ws.onopen = () => {
+        console.log('Signaling connected');
+        if (AUTH_TOKEN) {
+            ws.send(JSON.stringify({ type: 'auth', token: AUTH_TOKEN }));
+        }
+    };
     setConnectionStatus('Signaling connected. Waiting for media...', 'ready');
 
     setParticipantCount(typeof INITIAL_PARTICIPANT_COUNT === 'number' ? INITIAL_PARTICIPANT_COUNT : 0);
