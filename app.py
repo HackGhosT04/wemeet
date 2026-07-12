@@ -27,6 +27,8 @@ app.include_router(pages.router)
 # WebSocket endpoint
 @app.websocket("/ws/{meeting_id}")
 async def ws_endpoint(websocket, meeting_id: str):
+    # Accept immediately to avoid handshake-level 403 rejections before app logic runs.
+    await websocket.accept()
     await signaling_endpoint(websocket, meeting_id)
 
 
