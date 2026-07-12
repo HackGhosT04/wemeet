@@ -28,20 +28,23 @@ def _sync_participant_count(meeting_id: str) -> int:
 
 async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
     # Prefer the authenticated session cookie; fall back to query token for compatibility.
-    session_data = getattr(websocket, "session", {}) or {}
+    session_data = websocket.scope.get("session") or {}
     token = session_data.get("token") or websocket.query_params.get("token")
     if not token:
+        logger.warning("WebSocket rejected for meeting %s: missing token", meeting_id)
         await websocket.close(code=4001, reason="Missing token")
         return
     try:
         decoded = verify_token(token)
         user_id = decoded["uid"]
     except Exception:
+        logger.exception("WebSocket rejected for meeting %s: invalid token", meeting_id)
         await websocket.close(code=4001, reason="Invalid token")
         return
 
     meeting_data = realtime_db.child("meetings").child(meeting_id).get()
     if not meeting_data or not meeting_data.get("active", True):
+        logger.warning("WebSocket rejected for meeting %s: meeting missing or inactive", meeting_id)
         await websocket.close(code=4004, reason="Meeting not found")
         return
 
