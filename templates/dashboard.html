@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - VideoMeet{% endblock %}
+{% block content %}
+<div class="dashboard-container">
+    <h1>Welcome, {{ user.name }}</h1>
+    <p>You are logged in as {{ user.email }}</p>
+    <form method="POST" action="/create-meeting">
+        <button type="submit" class="btn btn-primary">Create Meeting</button>
+    </form>
+    <p><a href="/logout" class="btn btn-outline">Logout</a></p>
+</div>
+{% endblock %}

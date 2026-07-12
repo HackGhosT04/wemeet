@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+jinja2
+firebase-admin
+python-dotenv
+requests
+itsdangerous
+aiofiles
+python-multipart
+aiortc

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: webrtc-meeting-app
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: FIREBASE_WEB_API_KEY
+        sync: false
+      - key: FIREBASE_CONFIG_JSON
+        sync: false
+      - key: FIREBASE_DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET_KEY
+        generateValue: true
+      # TURN removed to avoid costs; app uses Google STUN only

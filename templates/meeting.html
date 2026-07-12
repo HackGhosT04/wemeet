@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Meeting - {{ meeting_id }}{% endblock %}
+{% block content %}
+<div id="meeting-container">
+    <h2>Meeting: <span id="meeting-id">{{ meeting_id }}</span></h2>
+    <div id="videos">
+        <div class="video-wrapper local" id="wrapper-local">
+            <video id="localVideo" autoplay muted playsinline></video>
+            <span class="label">You ({{ user.name }})</span>
+        </div>
+        <!-- Remote videos inserted dynamically -->
+    </div>
+    <div id="controls">
+        <button id="muteMic">Mute Mic</button>
+        <button id="toggleCam">Disable Camera</button>
+        <button id="leaveMeeting">Leave</button>
+    </div>
+    <div id="share">
+        <label>Share this meeting:</label>
+        <input type="text" id="shareLink" value="{{ request.url }}" readonly style="width:70%;">
+        <button id="copyLink">Copy</button>
+    </div>
+    <div id="participants-list">
+        <strong>Participants:</strong>
+        <div>You ({{ user.name }})</div>
+    </div>
+</div>
+
+<script>
+    const MEETING_ID = "{{ meeting_id }}";
+    const AUTH_TOKEN = "{{ token }}";
+    const ICE_SERVERS = {{ ice_servers_json | safe }};
+    const USER_ID = "{{ user.uid }}";
+    const USER_NAME = "{{ user.name }}";
+</script>
+<script src="/static/js/webrtc.js"></script>
+<script>
+    document.getElementById('copyLink')?.addEventListener('click', () => {
+        const el = document.getElementById('shareLink');
+        if (!el) return;
+        el.select();
+        document.execCommand('copy');
+        alert('Meeting link copied to clipboard');
+    });
+</script>
+{% endblock %}

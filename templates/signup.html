@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Sign Up - VideoMeet{% endblock %}
+{% block content %}
+<div class="form-container">
+    <h2>Create an Account</h2>
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+    <form method="POST" action="/signup{% if request.query_params.next %}?next={{ request.query_params.next }}{% endif %}">
+        <label>Name</label>
+        <input type="text" name="name" required>
+        <label>Email</label>
+        <input type="email" name="email" required>
+        <label>Password</label>
+        <input type="password" name="password" required minlength="6">
+        <label>Confirm Password</label>
+        <input type="password" name="confirm_password" required minlength="6">
+        <button type="submit" class="btn">Sign Up</button>
+    </form>
+    <p>Already have an account? <a href="/login">Login</a></p>
+</div>
+{% endblock %}
