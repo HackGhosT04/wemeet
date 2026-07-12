@@ -188,7 +188,7 @@ async function connectToPeer(userId, name, isOfferer) {
 
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${protocol}://${window.location.host}/ws/${MEETING_ID}?token=${AUTH_TOKEN}`);
+    ws = new WebSocket(`${protocol}://${window.location.host}/ws/${MEETING_ID}`);
 
     ws.onopen = () => console.log('Signaling connected');
     setConnectionStatus('Signaling connected. Waiting for media...', 'ready');

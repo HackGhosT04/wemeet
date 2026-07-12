@@ -27,8 +27,9 @@ def _sync_participant_count(meeting_id: str) -> int:
         return len(active_meetings.get(meeting_id, []))
 
 async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
-    # Extract token from query parameter
-    token = websocket.query_params.get("token")
+    # Prefer the authenticated session cookie; fall back to query token for compatibility.
+    session_data = getattr(websocket, "session", {}) or {}
+    token = session_data.get("token") or websocket.query_params.get("token")
     if not token:
         await websocket.close(code=4001, reason="Missing token")
         return
