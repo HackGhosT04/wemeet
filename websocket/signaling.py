@@ -27,6 +27,10 @@ def _sync_participant_count(meeting_id: str) -> int:
         return len(active_meetings.get(meeting_id, []))
 
 async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
+    # Accept first so auth or room failures surface as explicit close codes
+    # instead of a pre-accept 403 during the handshake.
+    await websocket.accept()
+
     # Prefer the authenticated session cookie; fall back to query token for compatibility.
     session_data = websocket.scope.get("session") or {}
     token = session_data.get("token") or websocket.query_params.get("token")
@@ -66,7 +70,6 @@ async def signaling_endpoint(websocket: WebSocket, meeting_id: str):
             pass
         active_meetings[meeting_id].discard(old_ws)
 
-    await websocket.accept()
     active_meetings[meeting_id].add(websocket)
     user_connections[meeting_id][user_id] = websocket
 
